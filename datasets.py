@@ -12,17 +12,20 @@ class ImageDataset(Dataset):
         self.unaligned = unaligned
 
         self.files_A = sorted(glob.glob(os.path.join(root, '%s/A' % mode) + '/*.*'))
-        self.files_B = sorted(glob.glob(os.path.join(root, '%s/B' % mode) + '/*.*'))
+        self.files_B1 = sorted(glob.glob(os.path.join(root, '%s/B1' % mode) + '/*.*'))
+        self.files_B2 = sorted(glob.glob(os.path.join(root, '%s/B2' % mode) + '/*.*'))
 
     def __getitem__(self, index):
         item_A = self.transform(Image.open(self.files_A[index % len(self.files_A)]))
 
         if self.unaligned:
-            item_B = self.transform(Image.open(self.files_B[random.randint(0, len(self.files_B) - 1)]))
+            item_B1 = self.transform(Image.open(self.files_B1[random.randint(0, len(self.files_B1) - 1)]))
+            item_B2 = self.transform(Image.open(self.files_B2[random.randint(0, len(self.files_B2) - 1)]))
         else:
-            item_B = self.transform(Image.open(self.files_B[index % len(self.files_B)]))
+            item_B1 = self.transform(Image.open(self.files_B1[index % len(self.files_B1)]))
+            item_B2 = self.transform(Image.open(self.files_B2[index % len(self.files_B2)]))
 
-        return {'A': item_A, 'B': item_B}
+        return {'A': item_A, 'B1': item_B1, 'B2': item_B2}
 
     def __len__(self):
-        return max(len(self.files_A), len(self.files_B))
+        return max(len(self.files_A), len(self.files_B1), len(self.files_B2))
