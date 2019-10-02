@@ -160,6 +160,11 @@ for epoch in range(opt.epoch, opt.n_epochs):
         ###################################
 
         ###### Discriminator B ######
+        
+        loss_D_B1 = 0
+        loss_D_B2 = 0
+
+        
         if i % 2 ==0:
             optimizer_D_B1.zero_grad()
 
