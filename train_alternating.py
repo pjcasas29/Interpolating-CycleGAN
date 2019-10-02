@@ -40,18 +40,21 @@ if torch.cuda.is_available() and not opt.cuda:
 netG_A2B = Generator(opt.input_nc, opt.output_nc)
 netG_B2A = Generator(opt.output_nc, opt.input_nc)
 netD_A = Discriminator(opt.input_nc)
-netD_B = Discriminator(opt.output_nc)
+netD_B1 = Discriminator(opt.output_nc)
+netD_B2 = Discriminator(opt.output_nc)
 
 if opt.cuda:
     netG_A2B.cuda()
     netG_B2A.cuda()
     netD_A.cuda()
-    netD_B.cuda()
+    netD_B1.cuda()
+    netD_B2.cuda()
 
 netG_A2B.apply(weights_init_normal)
 netG_B2A.apply(weights_init_normal)
 netD_A.apply(weights_init_normal)
-netD_B.apply(weights_init_normal)
+netD_B1.apply(weights_init_normal)
+netD_B2.apply(weights_init_normal)
 
 # Lossess
 criterion_GAN = torch.nn.MSELoss()
@@ -62,16 +65,19 @@ criterion_identity = torch.nn.L1Loss()
 optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),
                                 lr=opt.lr, betas=(0.5, 0.999))
 optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.lr, betas=(0.5, 0.999))
-optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.lr, betas=(0.5, 0.999))
+optimizer_D_B1 = torch.optim.Adam(netD_B1.parameters(), lr=opt.lr, betas=(0.5, 0.999))
+optimizer_D_B2 = torch.optim.Adam(netD_B2.parameters(), lr=opt.lr, betas=(0.5, 0.999))
 
 lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(optimizer_G, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
 lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
-lr_scheduler_D_B = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
+lr_scheduler_D_B1 = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B1, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
+lr_scheduler_D_B2 = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B2, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
 
 # Inputs & targets memory allocation
 Tensor = torch.cuda.FloatTensor if opt.cuda else torch.Tensor
 input_A = Tensor(opt.batchSize, opt.input_nc, opt.size, opt.size)
 input_B = Tensor(opt.batchSize, opt.output_nc, opt.size, opt.size)
+
 target_real = Variable(Tensor(opt.batchSize).fill_(1.0), requires_grad=False)
 target_fake = Variable(Tensor(opt.batchSize).fill_(0.0), requires_grad=False)
 
@@ -96,7 +102,9 @@ for epoch in range(opt.epoch, opt.n_epochs):
     for i, batch in enumerate(dataloader):
         # Set model input
         real_A = Variable(input_A.copy_(batch['A']))
-        real_B = Variable(input_B.copy_(batch['B']))
+        
+        sample = 'B1' if i % 2 == 0 else 'B2'
+        real_B = Variable(input_B.copy_(batch[sample]))
 
         ###### Generators A2B and B2A ######
         optimizer_G.zero_grad()
@@ -111,7 +119,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
 
         # GAN loss
         fake_B = netG_A2B(real_A)
-        pred_fake = netD_B(fake_B)
+        pred_fake = netD_B1(fake_B) if i % 2 == 0 else netD_B2(fake_B) 
         loss_GAN_A2B = criterion_GAN(pred_fake, target_real)
 
         fake_A = netG_B2A(real_B)
@@ -152,37 +160,61 @@ for epoch in range(opt.epoch, opt.n_epochs):
         ###################################
 
         ###### Discriminator B ######
-        optimizer_D_B.zero_grad()
+        if i % 2 ==0:
+            optimizer_D_B1.zero_grad()
 
-        # Real loss
-        pred_real = netD_B(real_B)
-        loss_D_real = criterion_GAN(pred_real, target_real)
+            # Real loss
+            pred_real = netD_B1(real_B)
+            loss_D_real = criterion_GAN(pred_real, target_real)
         
-        # Fake loss
-        fake_B = fake_B_buffer.push_and_pop(fake_B)
-        pred_fake = netD_B(fake_B.detach())
-        loss_D_fake = criterion_GAN(pred_fake, target_fake)
+            # Fake loss
+            fake_B = fake_B_buffer.push_and_pop(fake_B)
+            pred_fake = netD_B1(fake_B.detach())
+            loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
-        # Total loss
-        loss_D_B = (loss_D_real + loss_D_fake)*0.5
-        loss_D_B.backward()
+            # Total loss
+            loss_D_B1 = (loss_D_real + loss_D_fake)*0.5
+            loss_D_B1.backward()
 
-        optimizer_D_B.step()
+            optimizer_D_B1.step()
+
+        else:
+
+            optimizer_D_B2.zero_grad()
+
+            # Real loss
+            pred_real = netD_B2(real_B)
+            loss_D_real = criterion_GAN(pred_real, target_real)
+        
+            # Fake loss
+            fake_B = fake_B_buffer.push_and_pop(fake_B)
+            pred_fake = netD_B2(fake_B.detach())
+            loss_D_fake = criterion_GAN(pred_fake, target_fake)
+
+            # Total loss
+            loss_D_B2 = (loss_D_real + loss_D_fake)*0.5
+            loss_D_B2.backward()
+
+            optimizer_D_B2.step()
+
+            
         ###################################
 
         # Progress report (http://localhost:8097)
         logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-                    'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D': (loss_D_A + loss_D_B)}, 
+                    'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D1': (loss_D_A + loss_D_B1), 'loss_D2': (loss_D_A + loss_D_B2)}, 
                     images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
 
     # Update learning rates
     lr_scheduler_G.step()
     lr_scheduler_D_A.step()
-    lr_scheduler_D_B.step()
+    lr_scheduler_D_B1.step()
+    lr_scheduler_D_B2.step()
 
     # Save models checkpoints
     torch.save(netG_A2B.state_dict(), 'output/netG_A2B.pth')
     torch.save(netG_B2A.state_dict(), 'output/netG_B2A.pth')
     torch.save(netD_A.state_dict(), 'output/netD_A.pth')
-    torch.save(netD_B.state_dict(), 'output/netD_B.pth')
+    torch.save(netD_B1.state_dict(), 'output/netD_B1.pth')
+    torch.save(netD_B2.state_dict(), 'output/netD_B2.pth')
 ###################################
