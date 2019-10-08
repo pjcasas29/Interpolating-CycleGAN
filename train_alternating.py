@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from PIL import Image
 import torch
+import torch.nn as nn 
 
 from models import Generator
 from models import Discriminator
@@ -37,11 +38,14 @@ if torch.cuda.is_available() and not opt.cuda:
 
 ###### Definition of variables ######
 # Networks
-netG_A2B = Generator(opt.input_nc, opt.output_nc)
-netG_B2A = Generator(opt.output_nc, opt.input_nc)
-netD_A = Discriminator(opt.input_nc)
-netD_B1 = Discriminator(opt.output_nc)
-netD_B2 = Discriminator(opt.output_nc)
+netG_A2B = nn.DataParallel(Generator(opt.input_nc, opt.output_nc))
+netG_B2A = nn.DataParallel(Generator(opt.output_nc, opt.input_nc))
+netD_A = nn.DataParallel(Discriminator(opt.input_nc))
+netD_B1 = nn.DataParallel(Discriminator(opt.output_nc))
+netD_B2 = nn.DataParallel(Discriminator(opt.output_nc))
+
+#device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+
 
 if opt.cuda:
     netG_A2B.cuda()
@@ -49,7 +53,14 @@ if opt.cuda:
     netD_A.cuda()
     netD_B1.cuda()
     netD_B2.cuda()
-
+"""
+if opt.cuda:
+    netG_A2B.to(device)
+    netG_B2A.to(device)
+    netD_A.to(device)
+    netD_B1.to(device)
+    netD_B2.cuda()
+"""
 netG_A2B.apply(weights_init_normal)
 netG_B2A.apply(weights_init_normal)
 netD_A.apply(weights_init_normal)
