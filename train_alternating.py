@@ -2,14 +2,14 @@
 
 import argparse
 import itertools
-
+import sys
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from PIL import Image
 import torch
 import torch.nn as nn 
-
+import os
 from models import Generator
 from models import Discriminator
 from utils import ReplayBuffer
@@ -17,8 +17,13 @@ from utils import LambdaLR
 from utils import Logger
 from utils import weights_init_normal
 from datasets import ImageDataset
+from tensorboardX import SummaryWriter
+
+
+os.environ['CUDA_VISIBLE_DEVICES']='2,3'
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--experiment', type=str, default='', help='Experiment name')
 parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
 parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
 parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
@@ -33,6 +38,9 @@ parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads 
 opt = parser.parse_args()
 print(opt)
 
+if opt.experiment == '':
+    print("ERROR: Must provide experiment name for logging")
+    sys.exit()
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
@@ -106,6 +114,7 @@ dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_, unal
 
 # Loss plot
 logger = Logger(opt.n_epochs, len(dataloader))
+writer = SummaryWriter(logdir=logdir)
 ###################################
 
 ###### Training ######
@@ -215,12 +224,13 @@ for epoch in range(opt.epoch, opt.n_epochs):
 
             
         ###################################
-
+        
         # Progress report (http://localhost:8097)
         logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-                    'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D1': (loss_D_A + loss_D_B1), 'loss_D2': (loss_D_A + loss_D_B2)}, 
-                    images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
-
+                    'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D1': (loss_D_A + loss_D_B1), 'loss_D2': (loss_D_A + loss_D_B2)}) 
+                    #images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+        
+        #print({'loss_G': loss_G.item(), 'loss_G_identity': (loss_identity_A + loss_identity_B).item(), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A).item(),'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB).item(), 'loss_D1': (loss_D_A + loss_D_B1).item(), 'loss_D2': (loss_D_A + loss_D_B2).item()}) 
     # Update learning rates
     lr_scheduler_G.step()
     lr_scheduler_D_A.step()

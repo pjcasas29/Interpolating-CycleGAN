@@ -1,0 +1,2 @@
+Implement tensorX for logging
+Implement output of each experiment to a specific folder for each one - this includes logs, models and images
