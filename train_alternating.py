@@ -1,8 +1,11 @@
 #!/usr/bin/python3
 
+from __future__ import unicode_literals
+
 import argparse
 import itertools
 import sys
+import shutil
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
@@ -15,12 +18,13 @@ from models import Discriminator
 from utils import ReplayBuffer
 from utils import LambdaLR
 from utils import Logger
+from utils import tensor2image
 from utils import weights_init_normal
 from datasets import ImageDataset
 from tensorboardX import SummaryWriter
+from prompt_toolkit import prompt
 
-
-os.environ['CUDA_VISIBLE_DEVICES']='2,3'
+#os.environ['CUDA_VISIBLE_DEVICES']='2,3'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment', type=str, default='', help='Experiment name')
@@ -35,12 +39,31 @@ parser.add_argument('--input_nc', type=int, default=3, help='number of channels 
 parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
 parser.add_argument('--cuda', action='store_true', help='use GPU computation')
 parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
+
 opt = parser.parse_args()
 print(opt)
 
 if opt.experiment == '':
     print("ERROR: Must provide experiment name for logging")
     sys.exit()
+
+output_path = 'experiments/' + opt.experiment + '/'
+
+if os.path.exists(output_path):
+    text = prompt("Experiment directory already exists. Would you like to overwrite? (y/N): ")
+    if text is '' or text is 'N' or text is 'n':
+        sys.exit()
+    elif text is 'y' or text is 'Y':
+        shutil.rmtree(output_path)
+
+os.mkdir(output_path)
+
+writer = SummaryWriter(output_path)
+
+log = open(output_path + 'params', "w+")
+log.write(str(opt)) 
+log.close()    
+
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
@@ -114,15 +137,20 @@ dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_, unal
 
 # Loss plot
 logger = Logger(opt.n_epochs, len(dataloader))
-writer = SummaryWriter(logdir=logdir)
+
 ###################################
 
 ###### Training ######
 for epoch in range(opt.epoch, opt.n_epochs):
+    
     for i, batch in enumerate(dataloader):
+        if len(batch['A']) < opt.batchSize:
+            print("batch length: " + str(len(batch['A'])) + " batchSize: " + str(opt.batchSize))
+            continue
         # Set model input
-        real_A = Variable(input_A.copy_(batch['A']))
         
+        real_A = Variable(input_A.copy_(batch['A']))
+
         sample = 'B1' if i % 2 == 0 else 'B2'
         real_B = Variable(input_B.copy_(batch[sample]))
 
@@ -181,12 +209,14 @@ for epoch in range(opt.epoch, opt.n_epochs):
 
         ###### Discriminator B ######
         
-        loss_D_B1 = 0
-        loss_D_B2 = 0
+        loss_D_B1 = torch.tensor(1.0)
+        loss_D_B2 = torch.tensor(1.0)
 
-        
+         
         if i % 2 ==0:
+            print("L1")
             optimizer_D_B1.zero_grad()
+
 
             # Real loss
             pred_real = netD_B1(real_B)
@@ -198,13 +228,31 @@ for epoch in range(opt.epoch, opt.n_epochs):
             loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
             # Total loss
+
             loss_D_B1 = (loss_D_real + loss_D_fake)*0.5
             loss_D_B1.backward()
 
             optimizer_D_B1.step()
+            
+            global log_real_A1
+            global log_real_B1
+            global log_fake_A1
+            global log_fake_B1
+            
+            log_real_A1 = real_A.clone()
+            log_real_B1 = real_B.clone()
+            log_fake_A1 = fake_A.clone()
+            log_fake_B1 = fake_B.clone()
+            
+            #[print(list(log_real_A1[i,:,:,:].size())) for i in range(0, len(batch['A']))]
+
+            #[writer.add_image('real_A1', log_real_A1[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+            #[writer.add_image('real_B1', log_real_B1[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+            #[writer.add_image('fake_A1', log_fake_A1[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+            #[writer.add_image('fake_B1', log_fake_B1[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
 
         else:
-
+            print("L2")
             optimizer_D_B2.zero_grad()
 
             # Real loss
@@ -217,20 +265,60 @@ for epoch in range(opt.epoch, opt.n_epochs):
             loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
             # Total loss
+
             loss_D_B2 = (loss_D_real + loss_D_fake)*0.5
             loss_D_B2.backward()
 
             optimizer_D_B2.step()
+
+            global log_real_A2
+            global log_real_B2
+            global log_fake_A2
+            global log_fake_B2
+
+            log_real_A2 = real_A.clone()
+            log_real_B2 = real_B.clone()
+            log_fake_A2 = fake_A.clone()
+            log_fake_B2 = fake_B.clone()
+            
+            #[writer.add_image('real_A2', log_real_A2[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+            #[writer.add_image('real_B2', log_real_B2[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+            #[writer.add_image('fake_A2', log_fake_A2[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+            #[writer.add_image('fake_B2', log_fake_B2[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
 
             
         ###################################
         
         # Progress report (http://localhost:8097)
         logger.log({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),
-                    'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D1': (loss_D_A + loss_D_B1), 'loss_D2': (loss_D_A + loss_D_B2)}) 
+                    'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_DA':loss_D_A, 'loss_DB1': loss_D_B1, 'loss_DB2': loss_D_B2}) 
                     #images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B})
+        #log.write({'loss_G': loss_G, 'loss_G_identity': (loss_identity_A + loss_identity_B), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A), 'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_D1': (loss_D_A + loss_D_B1), 'loss_D2': (loss_D_A + loss_D_B2)})
+
+
+    writer.add_scalar('loss_G', loss_G.item(), epoch)
+    writer.add_scalar('loss_G_identity_A', loss_identity_A.item(), epoch)
+    writer.add_scalar('loss_G_identity_B', loss_identity_B.item(), epoch)
+    writer.add_scalar('loss_G_identity', (loss_identity_A+loss_identity_B).item(), epoch)
+    writer.add_scalar('loss_G_GAN_A2B', loss_GAN_A2B.item(), epoch)
+    writer.add_scalar('loss_G_GAN_B2A', loss_GAN_B2A.item(), epoch)
+    writer.add_scalar('loss_G_GAN', (loss_GAN_A2B + loss_GAN_B2A).item(), epoch)
+    writer.add_scalar('loss_cycle_BAB', loss_cycle_BAB.item(), epoch)
+    writer.add_scalar('loss_cycle_ABA', loss_cycle_ABA.item(), epoch)
+    writer.add_scalar('loss_cycle', (loss_cycle_ABA + loss_cycle_BAB).item(), epoch)
+    writer.add_scalar('loss_D_A', loss_D_A.item(), epoch)
+    writer.add_scalar('loss_D_B1', loss_D_B1.item(), epoch)
+    writer.add_scalar('loss_D_B2', loss_D_B2.item(), epoch)
+    [writer.add_image('real_A1', log_real_A1[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+    [writer.add_image('real_B1', log_real_B1[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+    [writer.add_image('fake_A1', log_fake_A1[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+    [writer.add_image('fake_B1', log_fake_B1[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+    [writer.add_image('real_A2', log_real_A2[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+    [writer.add_image('real_B2', log_real_B2[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+    [writer.add_image('fake_A2', log_fake_A2[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+    [writer.add_image('fake_B2', log_fake_B2[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
+
         
-        #print({'loss_G': loss_G.item(), 'loss_G_identity': (loss_identity_A + loss_identity_B).item(), 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A).item(),'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB).item(), 'loss_D1': (loss_D_A + loss_D_B1).item(), 'loss_D2': (loss_D_A + loss_D_B2).item()}) 
     # Update learning rates
     lr_scheduler_G.step()
     lr_scheduler_D_A.step()
@@ -238,9 +326,10 @@ for epoch in range(opt.epoch, opt.n_epochs):
     lr_scheduler_D_B2.step()
 
     # Save models checkpoints
-    torch.save(netG_A2B.state_dict(), 'output/netG_A2B.pth')
-    torch.save(netG_B2A.state_dict(), 'output/netG_B2A.pth')
-    torch.save(netD_A.state_dict(), 'output/netD_A.pth')
-    torch.save(netD_B1.state_dict(), 'output/netD_B1.pth')
-    torch.save(netD_B2.state_dict(), 'output/netD_B2.pth')
+    torch.save(netG_A2B.state_dict(), output_path + 'netG_A2B.pth')
+    torch.save(netG_B2A.state_dict(), output_path + 'netG_B2A.pth')
+    torch.save(netD_A.state_dict(), output_path + 'netD_A.pth')
+    torch.save(netD_B1.state_dict(), output_path + 'netD_B1.pth')
+    torch.save(netD_B2.state_dict(), output_path + 'netD_B2.pth')
 ###################################
+
