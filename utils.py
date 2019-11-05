@@ -29,6 +29,13 @@ class Logger():
         self.image_windows = {}
         self.output_path = output_path
 
+    def log_images(self, losses=None, images=None):
+        for image_name, tensor in images.items():
+            if image_name not in self.image_windows:
+                self.image_windows[image_name] = self.viz.image(tensor2image(tensor.data), opts={'title':image_name})
+            else:
+                self.viz.image(tensor2image(tensor.data), win=self.image_windows[image_name], opts={'title':image_name})
+
     def log(self, losses=None, images=None):
         self.mean_period += (time.time() - self.prev_time)
         self.prev_time = time.time()
@@ -72,7 +79,7 @@ class Logger():
                 # Reset losses for next epoch
                 self.losses[loss_name] = 0.0
             #save plots (pickled)
-            pickle.dump(self.loss_windows, open(self.output_path + "/plots.pkl", "wb"))
+            #pickle.dump(self.loss_windows, open(self.output_path + "/plots.pkl", "wb"))
             
             self.epoch += 1
             self.batch = 1

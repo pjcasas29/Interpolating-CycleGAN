@@ -246,7 +246,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
             log_fake_B1 = fake_B.clone()
             
 
-            logger.log(losses={'loss_G': loss_G, 'loss_G_identity_A': loss_identity_A,'loss_G_identity_B': loss_identity_B, 'loss_G_identity': (loss_identity_A + loss_identity_B),'loss_G_GAN_A2B': loss_GAN_A2B,'loss_G_GAN_B2A': loss_GAN_B2A, 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),'loss_cycle_BAB': loss_cycle_BAB, 'loss_cycle_ABA': loss_cycle_ABA, 'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_DA':loss_D_A, 'loss_DB1': loss_D_B1, 'loss_DB2': loss_D_B2}, images={'real_A1': log_real_A1, 'real_B1': log_real_B1, 'fake_A1': log_fake_A1, 'fake_B1': log_fake_B1})
+            logger.log(losses={'loss_G': loss_G, 'loss_G_identity_A': loss_identity_A,'loss_G_identity_B': loss_identity_B, 'loss_G_identity': (loss_identity_A + loss_identity_B),'loss_G_GAN_A2B': loss_GAN_A2B,'loss_G_GAN_B2A': loss_GAN_B2A, 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),'loss_cycle_BAB': loss_cycle_BAB, 'loss_cycle_ABA': loss_cycle_ABA, 'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_DA':loss_D_A, 'loss_DB1': loss_D_B1, 'loss_DB2': loss_D_B2}, images={})#'real_A1': log_real_A1, 'real_B1': log_real_B1, 'fake_A1': log_fake_A1, 'fake_B1': log_fake_B1})
     
         else:
 
@@ -278,7 +278,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
             log_fake_A2 = fake_A.clone()
             log_fake_B2 = fake_B.clone()
 
-            logger.log(losses={'loss_G': loss_G, 'loss_G_identity_A': loss_identity_A,'loss_G_identity_B': loss_identity_B, 'loss_G_identity': (loss_identity_A + loss_identity_B),'loss_G_GAN_A2B': loss_GAN_A2B,'loss_G_GAN_B2A': loss_GAN_B2A, 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),'loss_cycle_BAB': loss_cycle_BAB, 'loss_cycle_ABA': loss_cycle_ABA, 'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_DA':loss_D_A, 'loss_DB1': loss_D_B1, 'loss_DB2': loss_D_B2}, images={'real_A2': log_real_A2, 'real_B2': log_real_B2, 'fake_A2': log_fake_A2, 'fake_B2': log_fake_B2})
+            logger.log(losses={'loss_G': loss_G, 'loss_G_identity_A': loss_identity_A,'loss_G_identity_B': loss_identity_B, 'loss_G_identity': (loss_identity_A + loss_identity_B),'loss_G_GAN_A2B': loss_GAN_A2B,'loss_G_GAN_B2A': loss_GAN_B2A, 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),'loss_cycle_BAB': loss_cycle_BAB, 'loss_cycle_ABA': loss_cycle_ABA, 'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_DA':loss_D_A, 'loss_DB1': loss_D_B1, 'loss_DB2': loss_D_B2}, images={})#'real_A2': log_real_A2, 'real_B2': log_real_B2, 'fake_A2': log_fake_A2, 'fake_B2': log_fake_B2})
                 
         ###################################
         
@@ -307,8 +307,9 @@ for epoch in range(opt.epoch, opt.n_epochs):
     #[writer.add_image('real_B2', log_real_B2[i,:,:,:], epoch) for i in range(0, len(batch['B2']))]
     #[writer.add_image('fake_A2', log_fake_A2[i,:,:,:], epoch) for i in range(0, len(batch['A']))]
     #[writer.add_image('fake_B2', log_fake_B2[i,:,:,:], epoch) for i in range(0, len(batch['B2']))]
-
-        
+    
+    logger.log_images(losses={}, images={'real_A2': log_real_A2, 'real_B2': log_real_B2, 'fake_A2': log_fake_A2, 'fake_B2': log_fake_B2, 'real_A1': log_real_A1, 'real_B1': log_real_B1, 'fake_A1': log_fake_A1, 'fake_B1': log_fake_B1})
+    
     # Update learning rates
     lr_scheduler_G.step()
     lr_scheduler_D_A.step()
