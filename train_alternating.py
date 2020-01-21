@@ -132,7 +132,8 @@ transforms_ = [ transforms.Resize(int(opt.size*1.12), Image.BICUBIC),
                 transforms.RandomCrop(opt.size), 
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
-                transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ]
+                #transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ] #For colour
+                transforms.Normalize([0.5], [0.5])] #For B/W
 dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True), 
                         batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
 
@@ -165,7 +166,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
         # G_B2A(A) should equal A if real A is fed
         same_A = netG_B2A(real_A)
         loss_identity_A = criterion_identity(same_A, real_A)*5.0
-
+                
         # GAN loss
         fake_B = netG_A2B(real_A)
         pred_fake = netD_B1(fake_B) if i % 2 == 0 else netD_B2(fake_B) 
@@ -182,8 +183,9 @@ for epoch in range(opt.epoch, opt.n_epochs):
         recovered_B = netG_A2B(fake_A)
         loss_cycle_BAB = criterion_cycle(recovered_B, real_B)*10.0
 
-        # Total loss
-        loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+        # Total loss no identity
+        #loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+        loss_G = loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
         loss_G.backward()
         
         optimizer_G.step()
