@@ -1,5 +1,7 @@
 # Pytorch-CycleGAN
-A clean and readable Pytorch implementation of CycleGAN (https://arxiv.org/abs/1703.10593)
+A clean and readable Pytorch implementation of CycleGAN with additiional functionality for timbre style transfer on Spectrograms (https://arxiv.org/abs/1703.10593)
+
+Documentation is currently not up to date on added functionality on audio
 
 ## Prerequisites
 Code is intended to work with ```Python 3.6.x```, it hasn't been tested with previous versions
