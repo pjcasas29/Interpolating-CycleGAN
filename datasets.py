@@ -17,14 +17,14 @@ class ImageDataset(Dataset):
         self.files_B2 = sorted(glob.glob(os.path.join(root, '%s/B2' % mode) + '/*.*'))
 
     def __getitem__(self, index):
-        item_A = self.transform(Image.open(self.files_A[index % len(self.files_A)]))
+        item_A = self.transform(np.load(self.files_A[index % len(self.files_A)]))
 
         if self.unaligned:
-            item_B1 = self.transform(Image.open(self.files_B1[random.randint(0, len(self.files_B1) - 1)]))
-            item_B2 = self.transform(Image.open(self.files_B2[random.randint(0, len(self.files_B2) - 1)]))
+            item_B1 = self.transform(np.load(self.files_B1[random.randint(0, len(self.files_B1) - 1)]))
+            item_B2 = self.transform(np.load(self.files_B2[random.randint(0, len(self.files_B2) - 1)]))
         else:
-            item_B1 = self.transform(Image.open(self.files_B1[index % len(self.files_B1)]))
-            item_B2 = self.transform(Image.open(self.files_B2[index % len(self.files_B2)]))
+            item_B1 = self.transform(np.load(self.files_B1[index % len(self.files_B1)]))
+            item_B2 = self.transform(np.load(self.files_B2[index % len(self.files_B2)]))
 
         return {'A': item_A, 'B1': item_B1, 'B2': item_B2}
 
