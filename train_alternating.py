@@ -9,6 +9,7 @@ import shutil
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
+import torch.nn.functional as F
 from PIL import Image
 import torch
 import torch.nn as nn 
@@ -34,7 +35,9 @@ parser.add_argument('--batchSize', type=int, default=1, help='size of the batche
 parser.add_argument('--dataroot', type=str, default='datasets/horse2zebra/', help='root directory of the dataset')
 parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate')
 parser.add_argument('--decay_epoch', type=int, default=100, help='epoch to start linearly decaying the learning rate to 0')
-parser.add_argument('--size', type=int, default=256, help='size of the data crop (squared assumed)')
+parser.add_argument('--size', type=int, default=256, help='size of the data crop if image')
+parser.add_argument('--size_h', type=int, default=256, help='size of the data crop height')
+parser.add_argument('--size_w', type=int, default=256, help='size of the data crop width')
 parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
 parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
 parser.add_argument('--cuda', action='store_true', help='use GPU computation')
@@ -118,8 +121,8 @@ lr_scheduler_D_B2 = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B2, lr_lambda=
 
 # Inputs & targets memory allocation
 Tensor = torch.cuda.FloatTensor if opt.cuda else torch.Tensor
-input_A = Tensor(opt.batchSize, opt.input_nc, opt.size, opt.size)
-input_B = Tensor(opt.batchSize, opt.output_nc, opt.size, opt.size)
+input_A = Tensor(opt.batchSize, opt.input_nc, opt.size_h, opt.size_w)
+input_B = Tensor(opt.batchSize, opt.output_nc, opt.size_h, opt.size_w)
 
 target_real = Variable(Tensor(opt.batchSize).fill_(1.0), requires_grad=False)
 target_fake = Variable(Tensor(opt.batchSize).fill_(0.0), requires_grad=False)
@@ -128,14 +131,18 @@ fake_A_buffer = ReplayBuffer()
 fake_B_buffer = ReplayBuffer()
 
 # Dataset loader
+transforms_for_spectrograms = [ #transforms.Resize((int(opt.size_h), int(opt.size_w)), Image.BICUBIC),
+    #transforms.Resize(int(opt.size_h*1.12), Image.BICUBIC), 
+                                transforms.ToTensor()]
+                                #transforms.Normalize([0.5], [0.5])]
+
 transforms_ = [ transforms.Resize(int(opt.size*1.12), Image.BICUBIC), 
                 transforms.RandomCrop(opt.size), 
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
-                #transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ] #For colour
-                transforms.Normalize([0.5], [0.5])] #For B/W
-dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_, unaligned=True), 
-                        batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
+                transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ] #For colour
+                #transforms.Normalize([0.5], [0.5])] #For B/W
+dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_for_spectrograms, unaligned=True, size=(opt.size_h, opt.size_w)), batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu)
 
 # Loss plot
 logger = Logger(output_path, opt.n_epochs, len(dataloader), opt.batchSize)
@@ -161,26 +168,27 @@ for epoch in range(opt.epoch, opt.n_epochs):
 
         # Identity loss
         # G_A2B(B) should equal B if real B is fed
-        same_B = netG_A2B(real_B)
+        same_B = F.interpolate(netG_A2B(real_B), (opt.size_h, opt.size_w))
+
         loss_identity_B = criterion_identity(same_B, real_B)*5.0
         # G_B2A(A) should equal A if real A is fed
-        same_A = netG_B2A(real_A)
+        same_A = F.interpolate(netG_B2A(real_A), (opt.size_h, opt.size_w))
         loss_identity_A = criterion_identity(same_A, real_A)*5.0
                 
         # GAN loss
-        fake_B = netG_A2B(real_A)
+        fake_B = F.interpolate(netG_A2B(real_A), (opt.size_h, opt.size_w))
         pred_fake = netD_B1(fake_B) if i % 2 == 0 else netD_B2(fake_B) 
         loss_GAN_A2B = criterion_GAN(pred_fake, target_real)
 
-        fake_A = netG_B2A(real_B)
+        fake_A = F.interpolate(netG_B2A(real_B), (opt.size_h, opt.size_w))
         pred_fake = netD_A(fake_A)
         loss_GAN_B2A = criterion_GAN(pred_fake, target_real)
 
         # Cycle loss
-        recovered_A = netG_B2A(fake_B)
+        recovered_A = F.interpolate(netG_B2A(fake_B), (opt.size_h, opt.size_w))
         loss_cycle_ABA = criterion_cycle(recovered_A, real_A)*10.0
 
-        recovered_B = netG_A2B(fake_A)
+        recovered_B = F.interpolate(netG_A2B(fake_A), (opt.size_h, opt.size_w))
         loss_cycle_BAB = criterion_cycle(recovered_B, real_B)*10.0
 
         # Total loss no identity
