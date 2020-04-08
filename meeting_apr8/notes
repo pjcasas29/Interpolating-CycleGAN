@@ -1,0 +1,3 @@
+011 is the original 1024 but interpolated tp 512
+012 is done with stfts at 512 from the start.
+013 is Dry->Dry
