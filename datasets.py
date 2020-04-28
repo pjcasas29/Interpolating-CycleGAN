@@ -19,20 +19,21 @@ class ImageDataset(Dataset):
 
     def __getitem__(self, index):
         file_A = self.files_A[index % len(self.files_A)]
-        item_A = F.interpolate(self.transform(np.load(file_A)).unsqueeze(0), self.size).squeeze()
+        item_A = self.transform(Image.open(file_A))
         
         if self.unaligned:
+
             file_B1 = self.files_B1[random.randint(0, len(self.files_B1) -1)]
-            item_B1 = F.interpolate(self.transform(np.load(file_B1)).unsqueeze(0), self.size).squeeze()
+            item_B1 = self.transform(Image.open(file_B1))
             file_B2 = self.files_B2[random.randint(0, len(self.files_B2) -1)]
-            item_B2 = F.interpolate(self.transform(np.load(file_B2)).unsqueeze(0), self.size).squeeze()
+            item_B2 = self.transform(Image.open(file_B2))
         else:
             file_B1 = self.files_B1[index % len(self.files_B1)]
-            item_B1 = F.interpolate(self.transform(np.load(file_B1)).unsqueeze(0), self.size).squeeze()
+            item_B1 = self.transform(Image.open(file_B1))
             file_B2 = self.files_B2[index % len(self.files_B2)]
-            item_B2 = F.interpolate(self.transform(np.load(file_B2)).unsqueeze(0), self.size).squeeze()
+            item_B2 = self.transform(Image.open(file_B2))
 
-        return {'A': item_A, 'B1': item_B1, 'B2': item_B2, 'FA':File_A, 'FB1':File_B1, 'FB2':File_B2}
+        return {'A': item_A, 'B1': item_B1, 'B2': item_B2, 'FA':file_A, 'FB1':file_B1, 'FB2':file_B2}
 
     def __len__(self):
         return max(len(self.files_A), len(self.files_B1), len(self.files_B2))

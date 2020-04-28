@@ -25,7 +25,7 @@ from datasets import ImageDataset
 from tensorboardX import SummaryWriter
 from prompt_toolkit import prompt
 
-#os.environ['CUDA_VISIBLE_DEVICES']='2,3'
+#os.environ['CUDA_VISIBLE_DEVICES']='2'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment', type=str, default='', help='Experiment name')
@@ -131,7 +131,7 @@ fake_A_buffer = ReplayBuffer()
 fake_B_buffer = ReplayBuffer()
 
 # Dataset loader
-transforms_for_spectrograms = [ #transforms.Resize((int(opt.size_h), int(opt.size_w)), Image.BICUBIC),
+transforms_for_spectrograms = [ transforms.Resize((int(opt.size_h), int(opt.size_w)), Image.BICUBIC),
     #transforms.Resize(int(opt.size_h*1.12), Image.BICUBIC), 
                                 transforms.ToTensor()]
                                 #transforms.Normalize([0.5], [0.5])]
@@ -157,7 +157,8 @@ for epoch in range(opt.epoch, opt.n_epochs):
             print("batch length: " + str(len(batch['A'])) + " batchSize: " + str(opt.batchSize))
             continue
         # Set model input
-        
+        print(batch['A'].shape)
+        print(input_A.shape)
         real_A = Variable(input_A.copy_(batch['A']))
 
         sample = 'B1' if i % 2 == 0 else 'B2'

@@ -12,11 +12,13 @@ import torch
 import torch.nn as nn
 from models import Generator
 from datasets import ImageDataset
+import numpy as np
 
-os.environ['CUDA_VISIBLE_DEVICES']='2,3'
+#os.environ['CUDA_VISIBLE_DEVICES']='2,3'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
+parser.add_argument('--out_dir', type=str, default='output/', help='output directory of the results')
 parser.add_argument('--dataroot', type=str, default='datasets/horse2zebra/', help='root directory of the dataset')
 parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
 parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
@@ -62,8 +64,7 @@ transforms_ = [ transforms.ToTensor(),
 transforms_spec = [ transforms.ToTensor()]
 
 
-dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_spec, mode='test', size=(opt.size_h, opt.size_w), 
-                        batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu)
+dataloader = DataLoader(ImageDataset(opt.dataroot, transforms_=transforms_spec, mode='test', size=(opt.size_h, opt.size_w)), batch_size=opt.batchSize, shuffle=False, num_workers=opt.n_cpu)
 ###################################
 
 ###### Testing######
@@ -77,6 +78,7 @@ if not os.path.exists('output/B'):
     os.makedirs('output/B')
 
 for i, batch in enumerate(dataloader):
+
     # Set model input
     real_A = Variable(input_A.copy_(batch['A']))
     real_B1 = Variable(input_B.copy_(batch['B1']))
@@ -92,13 +94,19 @@ for i, batch in enumerate(dataloader):
 #    save_image(torch.cat((fake_A2, real_B2), 1), 'output/A2/%04d.png' % (i+1))
 #    save_image(torch.cat((fake_B, real_A), 1), 'output/B/%04d.png' % (i+1))
 
-    save_image(fake_A1, 'output/A1/%04d.png' % (i+1))
-    save_image(fake_A2, 'output/A2/%04d.png' % (i+1))
-    save_image(fake_B, 'output/B/%04d.png' % (i+1))
 
-    save_image(0.5*(real_B1 + 1.0), 'output/A1/%04dreal.png' % (i+1))
-    save_image(0.5*(real_B2 + 1.0), 'output/A2/%04dreal.png' % (i+1))
-    save_image(0.5*(real_A + 1.0), 'output/B/%04dreal.png' % (i+1))
+    #np.save(os.path.join(opt.out_dir, os.path.basename(batch['FA'][0])), fake_B.cpu().squeeze(0).squeeze(0).numpy().astype(np.float32), allow_pickle=False)
+    #np.save(os.path.join(opt.out_dir, os.path.basename(batch['FB1'][0])), fake_A1.cpu().squeeze(0).squeeze(0).numpy().astype(np.float32), allow_pickle=False)
+    #np.save(os.path.join(opt.out_dir, os.path.basename(batch['FB2'][0])), fake_A2.cpu().squeeze(0).squeeze(0).numpy().astype(np.float32), allow_pickle=False)
+    
+#    print(batch['FA'][0])
+    save_image(fake_B, os.path.join(opt.out_dir, os.path.basename(batch['FA'][0]))+".png")
+    save_image(fake_A1, os.path.join(opt.out_dir, os.path.basename(batch['FB1'][0]))+".png")
+    save_image(fake_A2, os.path.join(opt.out_dir, os.path.basename(batch['FB2'][0]))+".png")
+
+    #save_image(0.5*(real_B1 + 1.0), 'output/A1/%04dreal.png' % (i+1))
+    #save_image(0.5*(real_B2 + 1.0), 'output/A2/%04dreal.png' % (i+1))
+    #save_image(0.5*(real_A + 1.0), 'output/B/%04dreal.png' % (i+1))
     sys.stdout.write('\rGenerated images %04d of %04d' % (i+1, len(dataloader)))
 
 sys.stdout.write('\n')
