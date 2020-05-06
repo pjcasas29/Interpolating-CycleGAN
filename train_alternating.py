@@ -71,6 +71,42 @@ log.close()
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
+
+def cal_grad_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
+    """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
+    Arguments:
+        netD (network)              -- discriminator network
+        real_data (tensor array)    -- real images
+        fake_data (tensor array)    -- generated images from the generator
+        device (str)                -- GPU / CPU: from torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')
+        type (str)                  -- if we mix real and fake data or not [real | fake | mixed].
+        constant (float)            -- the constant used in formula ( | |gradient||_2 - constant)^2
+        lambda_gp (float)           -- weight for this loss
+    Returns the gradient penalty loss
+    """
+    if lambda_gp > 0.0:
+        if type == 'real':   # either use real images, fake images, or a linear interpolation of two.
+            interpolatesv = real_data
+        elif type == 'fake':
+            interpolatesv = fake_data
+        elif type == 'mixed':
+            alpha = torch.rand(real_data.shape[0], 1, device=device)
+            alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
+            interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
+        else:
+            raise NotImplementedError('{} not implemented'.format(type))
+        interpolatesv.requires_grad_(True)
+        disc_interpolates = netD(interpolatesv)
+        gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
+                                        grad_outputs=torch.ones(disc_interpolates.size()).to(device),
+                                        create_graph=True, retain_graph=True, only_inputs=True)
+        gradients = gradients[0].view(real_data.size(0), -1)  # flat the data
+        gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
+        return gradient_penalty, gradients
+    else:
+        return 0.0, None
+
+
 ###### Definition of variables ######
 # Networks
 netG_A2B = nn.DataParallel(Generator(opt.input_nc, opt.output_nc))
@@ -193,8 +229,8 @@ for epoch in range(opt.epoch, opt.n_epochs):
         loss_cycle_BAB = criterion_cycle(recovered_B, real_B)*10.0
 
         # Total loss no identity
-        #loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
-        loss_G = loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+        loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
+        #loss_G = loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
         loss_G.backward()
         
         optimizer_G.step()
@@ -211,6 +247,10 @@ for epoch in range(opt.epoch, opt.n_epochs):
         fake_A = fake_A_buffer.push_and_pop(fake_A)
         pred_fake = netD_A(fake_A.detach())
         loss_D_fake = criterion_GAN(pred_fake, target_fake)
+        
+        #Gradient penalty
+        gradient_penalty_A, gradients = cal_grad_penalty(netD_A, real_A, fake_A, 'cuda')
+        gradient_penalty_A.backward(retain_graph=True)
 
         # Total loss
         loss_D_A = (loss_D_real + loss_D_fake)*0.5
@@ -223,7 +263,8 @@ for epoch in range(opt.epoch, opt.n_epochs):
         
         loss_D_B1 = torch.tensor(1.0)
         loss_D_B2 = torch.tensor(1.0)
-
+        gradient_penalty_B1 = torch.tensor(1.0)
+        gradient_penalty_B2 = torch.tensor(1.0)
          
         if i % 2 ==0:
 
@@ -239,6 +280,9 @@ for epoch in range(opt.epoch, opt.n_epochs):
             pred_fake = netD_B1(fake_B.detach())
             loss_D_fake = criterion_GAN(pred_fake, target_fake)
 
+            #Gradient Penalty
+            gradient_penalty_B1, gradients = cal_grad_penalty(netD_B1, real_B, fake_B, 'cuda')
+            gradient_penalty_B1.backward(retain_graph=True)
             # Total loss
 
             loss_D_B1 = (loss_D_real + loss_D_fake)*0.5
@@ -257,7 +301,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
             log_fake_B1 = fake_B.clone()
             
 
-            logger.log(losses={'loss_G': loss_G, 'loss_G_identity_A': loss_identity_A,'loss_G_identity_B': loss_identity_B, 'loss_G_identity': (loss_identity_A + loss_identity_B),'loss_G_GAN_A2B': loss_GAN_A2B,'loss_G_GAN_B2A': loss_GAN_B2A, 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),'loss_cycle_BAB': loss_cycle_BAB, 'loss_cycle_ABA': loss_cycle_ABA, 'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_DA':loss_D_A, 'loss_DB1': loss_D_B1, 'loss_DB2': loss_D_B2}, images={})#'real_A1': log_real_A1, 'real_B1': log_real_B1, 'fake_A1': log_fake_A1, 'fake_B1': log_fake_B1})
+            logger.log(losses={'loss_G': loss_G, 'loss_G_identity_A': loss_identity_A,'loss_G_identity_B': loss_identity_B, 'loss_G_identity': (loss_identity_A + loss_identity_B),'loss_G_GAN_A2B': loss_GAN_A2B,'loss_G_GAN_B2A': loss_GAN_B2A, 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),'loss_cycle_BAB': loss_cycle_BAB, 'loss_cycle_ABA': loss_cycle_ABA, 'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_DA':loss_D_A, 'loss_DB1': loss_D_B1, 'loss_DB2': loss_D_B2, 'Grad penalty A':gradient_penalty_A, 'Grad penalty B1':gradient_penalty_B1, 'Grad penalty B2':gradient_penalty_B2}, images={})#'real_A1': log_real_A1, 'real_B1': log_real_B1, 'fake_A1': log_fake_A1, 'fake_B1': log_fake_B1})
     
         else:
 
@@ -271,6 +315,10 @@ for epoch in range(opt.epoch, opt.n_epochs):
             fake_B = fake_B_buffer.push_and_pop(fake_B)
             pred_fake = netD_B2(fake_B.detach())
             loss_D_fake = criterion_GAN(pred_fake, target_fake)
+
+            #Gradient Penalty
+            gradient_penalty_B2, gradients = cal_grad_penalty(netD_B2, real_B, fake_B, 'cuda')
+            gradient_penalty_B2.backward(retain_graph=True)
 
             # Total loss
 
@@ -289,7 +337,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
             log_fake_A2 = fake_A.clone()
             log_fake_B2 = fake_B.clone()
 
-            logger.log(losses={'loss_G': loss_G, 'loss_G_identity_A': loss_identity_A,'loss_G_identity_B': loss_identity_B, 'loss_G_identity': (loss_identity_A + loss_identity_B),'loss_G_GAN_A2B': loss_GAN_A2B,'loss_G_GAN_B2A': loss_GAN_B2A, 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),'loss_cycle_BAB': loss_cycle_BAB, 'loss_cycle_ABA': loss_cycle_ABA, 'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_DA':loss_D_A, 'loss_DB1': loss_D_B1, 'loss_DB2': loss_D_B2}, images={})#'real_A2': log_real_A2, 'real_B2': log_real_B2, 'fake_A2': log_fake_A2, 'fake_B2': log_fake_B2})
+            logger.log(losses={'loss_G': loss_G, 'loss_G_identity_A': loss_identity_A,'loss_G_identity_B': loss_identity_B, 'loss_G_identity': (loss_identity_A + loss_identity_B),'loss_G_GAN_A2B': loss_GAN_A2B,'loss_G_GAN_B2A': loss_GAN_B2A, 'loss_G_GAN': (loss_GAN_A2B + loss_GAN_B2A),'loss_cycle_BAB': loss_cycle_BAB, 'loss_cycle_ABA': loss_cycle_ABA, 'loss_G_cycle': (loss_cycle_ABA + loss_cycle_BAB), 'loss_DA':loss_D_A, 'loss_DB1': loss_D_B1, 'loss_DB2': loss_D_B2, 'Grad penalty A':gradient_penalty_A, 'Grad penalty B1':gradient_penalty_B1, 'Grad penalty B2':gradient_penalty_B2}, images={})#'real_A2': log_real_A2, 'real_B2': log_real_B2, 'fake_A2': log_fake_A2, 'fake_B2': log_fake_B2})
                 
         ###################################
         
